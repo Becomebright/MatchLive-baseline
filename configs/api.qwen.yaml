@@ -1,0 +1,5 @@
+# The local vLLM server of scripts/serve_qwen.sh (configs/qwen.yaml). It needs no key, but the
+# client wants one, so any non-empty string will do.
+endpoints:
+  - base_url: http://localhost:8000/v1
+    api_key: EMPTY

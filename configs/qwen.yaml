@@ -1,0 +1,12 @@
+# Qwen/Qwen3.8-27B served locally by scripts/serve_qwen.sh, in place of the API model of
+# default.yaml; every other setting is default.yaml's. Pass it to any script with
+# `--config configs/qwen.yaml` (README, "Local model").
+base: default.yaml
+
+api:
+  endpoint: configs/api.qwen.yaml      # http://localhost:8000/v1, no key
+  model: Qwen/Qwen3.8-27B
+  timeout: 1800                        # s; thinking over many frames on a shared local server can take minutes
+  # Sent with every request. Qwen thinks before answering; its default effort (xhigh) spends
+  # 5k-13k tokens on one analyzer window, minutes per window at ~75 tokens/s.
+  extra_body: {chat_template_kwargs: {reasoning_effort: medium}}

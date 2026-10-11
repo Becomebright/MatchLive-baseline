@@ -1,0 +1,9 @@
+# Copy to configs/api.local.yaml (gitignored) and fill in your endpoint and key. Any
+# OpenAI-compatible chat-completions endpoint works, if it accepts images and serves the model
+# named by `api.model` in configs/default.yaml. Endpoints are used in order: a failed request is
+# retried on the next one at once, and an endpoint out of quota is dropped for good.
+endpoints:
+  - base_url: https://api.example.com/v1
+    api_key: sk-...
+  # - base_url: https://backup.example.com/v1      # optional backup
+  #   api_key: sk-...

@@ -1,0 +1,103 @@
+# Default configuration. Relative paths are relative to the repo root (resolved by
+# matchlive.common.config.load_config). Every script takes `--config <file>` to use another one.
+
+paths:
+  # The challenge data as downloaded from Hugging Face (SoccerNet/SN-VQA-2027): test.json,
+  # challenge.json, and the video-test/ and video-challenge/ folders their video paths point into.
+  data: data/SN-VQA-2027
+  prematch: data/prematch              # pre-match facts of each split's games: <split>.json
+  checkpoints: checkpoints             # model weights
+  cache: cache                         # perception and API caches: costly to rebuild, safe to delete
+  outputs: outputs                     # match memories, QA logs, submissions
+
+# The streaming-QA agent; calls go through the `api` section's model.
+qa:
+  max_rounds: 4                        # model calls per question; the last one must answer
+  max_requests: 3                      # tool requests served per round
+  max_frames: 16                       # frames per get_frames / get_current_view
+  current_view: 8                      # s of video get_current_view shows, up to the question time (2 fps)
+
+# LLM API, called through an OpenAI-compatible endpoint; responses are cached under
+# paths.cache/<cache>, keyed by model + request.
+api:
+  # Endpoints, in a local file that is never committed (configs/*.local.yaml is gitignored;
+  # configs/api.example.yaml shows the format); used in order, the next one taking over when a
+  # request fails, and for good when one runs out of quota.
+  endpoint: configs/api.local.yaml
+  model: gemini-3.8-flash
+  cache: api
+  max_attempts: 8                      # a failed attempt is retried on the next endpoint at once; after a round on all of them, with backoff (5 s doubling, at most max_backoff)
+  max_backoff: 120                     # s; on a long overload with fast 503s a shorter cap gets through sooner
+  timeout: 180                         # s per request; a request past it fails and is retried
+
+events:
+  # The event analyzer looks at every window of the half: fixed windows, overlapping.
+  window_seconds: 30
+  window_overlap: 5
+  sample_fps: 2                        # frames per second shown to the event analyzer
+  replay_lookback: 90                  # a replayed event happened within this many s before its window
+  # A live candidate's interval is its second ± this. A substitution takes longer: the board
+  # goes up well before the players swap. Treatment of an injured player can run over a
+  # minute and be reported by several windows.
+  live_margin: {default: 10, substitution: 45, injury: 60}
+
+# Consistency check; seconds are match time within a half.
+consistency:
+  kickoff_gap: 60                      # two goals by one team closer than this cannot both hold
+  card_gap: 60                         # one player carded twice within this is checked
+  pair_window: 60                      # a foul's restart follows within this; a free kick's infringement precedes it
+  missing_wait: 150                    # a missing partner is judged only this long after the event (window + latency)
+  substitution_limit: 3                # per team (Premier League 2015-17)
+  # A conflict from per-frame perception goes to the arbiter only once this many independent
+  # sources back it: an off-pitch player's number read on k different tracks.
+  off_roster_k: 3
+
+# Arbiter; calls go through the `api` section's model.
+arbiter:
+  max_rounds: 4                        # model calls per case; no verdict by then = the case stays open
+  max_requests: 2                      # tool requests served per round
+  max_frames: 16                       # frames per get_frames
+  crops: 8                             # pictures per get_track_crops
+  context: 90                          # s around the members within which other events are listed
+
+perception:
+  detection:
+    model: rfdetr-l.onnx               # under paths.checkpoints
+    providers: [tensorrt, cuda, cpu]   # tried in this order; unavailable ones are skipped
+    fp16: true                         # TensorRT only
+    trt_cache: trt/rfdetr-l_fp16       # TensorRT engine cache, under paths.cache
+    confidence: 0.15
+
+  shots:
+    # Colour-histogram distance between consecutive frames above which a frame starts a new shot.
+    cut_threshold: 0.3
+
+  jersey:
+    model: jersey_dinov3_convnext_tiny-20_matches.onnx   # under paths.checkpoints
+    providers: [tensorrt, cuda, cpu]
+    fp16: true
+    trt_cache: trt/jersey_fp16
+    max_batch: 32                      # crops per inference call; the TensorRT engine is built for 1..max_batch
+
+  identity:
+    # Per-track votes over the cached observations (perception.identity.IdentityResolver).
+    vote_every: 1                      # frames between a track's votes
+    jersey_min_prob: 0.9               # a number read counts as a vote at this probability
+    min_number_votes: 2                # votes a number needs before it can name the player
+    team_min_margin: 0.2               # (far - near) / (far + near) kit distance to vote a team
+    kit_burn_in: 200                   # outfield colours seen before splitting them into two kits
+    kit_adapt_rate: 0.02               # how far each confident claim moves its cluster centre
+
+  ball:
+    # The ball is not tracked: each frame takes its best ball detection above this score.
+    min_score: 0.3
+
+  tracking:
+    # BoT-SORT (trackers library) for players and goalkeepers together; keyword arguments
+    # passed straight to trackers.BoTSORTTracker. Library defaults, except cmc_downscale.
+    lost_track_buffer: 30
+    track_activation_threshold: 0.7
+    minimum_consecutive_frames: 2
+    high_conf_det_threshold: 0.6
+    enable_cmc: true
+    cmc_downscale: 4                   # 720p -> 320x180 optical flow for camera-motion compensation

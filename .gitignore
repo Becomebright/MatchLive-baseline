@@ -1,0 +1,26 @@
+# Local API endpoints and keys (configs/api.local.yaml): never in version control
+configs/*.local.yaml
+.env
+
+# Challenge data, model weights, caches and run outputs
+data/SN-VQA-2027
+checkpoints/
+cache/
+outputs/
+*.onnx
+*.engine
+*.npz
+*.mkv
+*.mp4
+# download metadata written by `hf download --local-dir .`
+.cache/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
